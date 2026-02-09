@@ -116,6 +116,21 @@ if __name__ == "__main__":
         except Exception as e:
             await ctx.respond(f"{e}", ephemeral=True)
 
+    @bot.slash_command(name="language", description="Set transcription language (auto/de/eng).")
+    @discord.option(
+        "language",
+        description="Choose transcription language",
+        choices=["auto", "de", "eng"],
+        required=True,
+    )
+    async def language(ctx: discord.context.ApplicationContext, language: str):
+        selected_language = bot.set_transcription_language(ctx.guild_id, language)
+        display_language = "eng" if selected_language == "en" else selected_language
+        await ctx.respond(
+            f"Transcription language set to `{display_language}`.",
+            ephemeral=False,
+        )
+
     @bot.slash_command(name="scribe", description="Ink the Saga of this adventure.")
     async def ink(ctx: discord.context.ApplicationContext):
         await ctx.trigger_typing()
@@ -251,6 +266,8 @@ if __name__ == "__main__":
                 name="/scribe", value="Transcribe the voice channel.", inline=True),
             discord.EmbedField(
                 name="/stop", value="Stop the transcription.", inline=True),
+            discord.EmbedField(
+                name="/language", value="Set transcription language (auto/de/eng).", inline=True),
             discord.EmbedField(
                 name="/generate_pdf", value="Generate a PDF of the transcriptions.", inline=True),
             discord.EmbedField(

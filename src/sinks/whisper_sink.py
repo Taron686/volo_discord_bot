@@ -3,6 +3,7 @@ import base64
 import io
 import json
 import logging
+import os
 import threading
 import time
 import wave
@@ -18,7 +19,7 @@ from faster_whisper import WhisperModel
 from openai import OpenAI
 
 WHISPER_MODEL = "large-v3"
-WHISPER_LANGUAGE = "en"
+DEFAULT_TRANSCRIPTION_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "auto")
 WHISPER__PRECISION = "float32"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -69,6 +70,7 @@ class WhisperSink(Sink):
         loop: asyncio.AbstractEventLoop,
         transcriber_type="local",
         *,
+        transcription_language: str = DEFAULT_TRANSCRIPTION_LANGUAGE,
         filters=None,
         player_map={},
         data_length=50000,
@@ -85,6 +87,9 @@ class WhisperSink(Sink):
         self.data_length = data_length
         self.max_speakers = max_speakers
         self.transcriber_type = transcriber_type
+        self.transcription_language = self.normalize_transcription_language(
+            transcription_language
+        )
         if transcriber_type == "openai":
             self.client = OpenAI()
         self.vc = None
@@ -94,6 +99,33 @@ class WhisperSink(Sink):
         self.voice_queue = Queue()
         self.executor = ThreadPoolExecutor(max_workers=8)  # TODO: Adjust this
         self.player_map = player_map
+
+    @staticmethod
+    def normalize_transcription_language(language: str | None) -> str:
+        if language is None:
+            return "auto"
+
+        normalized = str(language).strip().lower()
+        aliases = {
+            "auto": "auto",
+            "de": "de",
+            "deu": "de",
+            "deutsch": "de",
+            "german": "de",
+            "en": "en",
+            "eng": "en",
+            "english": "en",
+        }
+        return aliases.get(normalized, "auto")
+
+    def set_transcription_language(self, language: str | None) -> str:
+        self.transcription_language = self.normalize_transcription_language(language)
+        return self.transcription_language
+
+    def _get_transcription_language(self) -> str | None:
+        if self.transcription_language == "auto":
+            return None
+        return self.transcription_language
 
     def start_voice_thread(self, on_exception=None):
         def thread_exception_hook(args):
@@ -135,45 +167,56 @@ class WhisperSink(Sink):
             frame_rate = wave_file.getframerate()
             duration = frames / float(frame_rate)
         return duration
+
+    def _transcribe_with_openai(self, temp_file, language: str | None) -> str:
+        temp_file.seek(0)
+        transcription_args = {
+            "file": ("foobar.wav", temp_file),
+            "model": "whisper-1",
+        }
+        if language:
+            transcription_args["language"] = language
+
+        openai_transcription = self.client.audio.transcriptions.create(
+            **transcription_args
+        )
+        logger.info(f"OpenAI Transcription: {openai_transcription.text}")
+        return openai_transcription.text
+
+    def _transcribe_with_local_model(self, temp_file, language: str | None) -> str:
+        temp_file.seek(0)
+        segments, _ = audio_model.transcribe(
+            temp_file,
+            language=language,
+            beam_size=10,
+            best_of=3,
+            vad_filter=True,
+            vad_parameters=dict(
+                min_silence_duration_ms=150,
+                threshold=0.8
+            ),
+            no_speech_threshold=0.6,
+            initial_prompt="You are writing the transcriptions for a D&D game.",
+        )
+
+        segments = list(segments)
+        result = ""
+        for segment in segments:
+            result += segment.text
+
+        logger.info(f"Transcription: {result}")
+        return result
+
     def transcribe_audio(self, temp_file):
         try:
             # Ensure that the audio is long enough to transcribe. If not, return an empty string
             if self.check_audio_length(temp_file) <= 0.1:
                 return ""
-            
+
+            language = self._get_transcription_language()
             if self.transcriber_type == "openai":
-                temp_file.seek(0)
-                openai_transcription = self.client.audio.transcriptions.create(
-                    file=("foobar.wav", temp_file),
-                    model="whisper-1",
-                    language=WHISPER_LANGUAGE,
-                )
-                logger.info(f"OpenAI Transcription: {openai_transcription.text}")
-                return openai_transcription.text
-            else:               
-                # The whisper model
-                temp_file.seek(0)
-                segments, info = audio_model.transcribe(
-                    temp_file,
-                    language=WHISPER_LANGUAGE,
-                    beam_size=10,
-                    best_of=3,
-                    vad_filter=True,
-                    vad_parameters=dict(
-                        min_silence_duration_ms=150,
-                        threshold=0.8
-                    ),
-                    no_speech_threshold=0.6,
-                    initial_prompt="You are writing the transcriptions for a D&D game.",
-                )
-
-                segments = list(segments)
-                result = ""
-                for segment in segments:
-                    result += segment.text
-
-                logger.info(f"Transcription: {result}")
-                return result
+                return self._transcribe_with_openai(temp_file, language)
+            return self._transcribe_with_local_model(temp_file, language)
         except Exception as e:
             logger.error(f"Error transcribing audio: {e}")
             return ""

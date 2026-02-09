@@ -15,6 +15,7 @@ DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 TRANSCRIPTION_METHOD = os.getenv("TRANSCRIPTION_METHOD")
 PLAYER_MAP_FILE_PATH = os.getenv("PLAYER_MAP_FILE_PATH")
 CHUNK_SECONDS = int(os.getenv("CHUNK_SECONDS", "30"))
+TRANSCRIPTION_LANGUAGE = os.getenv("TRANSCRIPTION_LANGUAGE", "auto")
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,13 @@ class VoloBot(discord.Bot):
         self.guild_is_recording = {}
         self.guild_whisper_sinks = {}
         self.guild_whisper_message_tasks = {}
+        self.guild_transcription_languages: dict[int, str] = {}
         self.active_sessions: dict[int, SessionContext] = {}
         self.player_map = {}
         self._is_ready = False
+        self.default_transcription_language = WhisperSink.normalize_transcription_language(
+            TRANSCRIPTION_LANGUAGE
+        )
         if TRANSCRIPTION_METHOD == "openai":
             self.transcriber_type = "openai"
         else:
@@ -90,6 +95,7 @@ class VoloBot(discord.Bot):
             data_length=50000,
             max_speakers=10,
             transcriber_type=self.transcriber_type,
+            transcription_language=self.get_transcription_language(ctx.guild_id),
             player_map=self.player_map,
         )
 
@@ -124,6 +130,21 @@ class VoloBot(discord.Bot):
     def cleanup_sink(self, ctx: discord.context.ApplicationContext):
         guild_id = ctx.guild_id
         self._close_and_clean_sink_for_guild(guild_id)
+
+    def get_transcription_language(self, guild_id: int) -> str:
+        return self.guild_transcription_languages.get(
+            guild_id, self.default_transcription_language
+        )
+
+    def set_transcription_language(self, guild_id: int, language: str) -> str:
+        normalized_language = WhisperSink.normalize_transcription_language(language)
+        self.guild_transcription_languages[guild_id] = normalized_language
+
+        running_sink = self.guild_whisper_sinks.get(guild_id)
+        if running_sink:
+            running_sink.set_transcription_language(normalized_language)
+
+        return normalized_language
 
     @staticmethod
     def _format_timestamp(total_seconds: int) -> str:

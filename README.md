@@ -53,6 +53,7 @@ To set up and run this Discord bot, follow these steps:
    DISCORD_TOKEN=your_discord_bot_token
    GUILD_ID=your_guild_id
    PLAYER_MAP_FILE_PATH=path_to_player_map.yml
+   TRANSCRIPTION_LANGUAGE=auto
    ```
 
 ### Configuration
@@ -71,6 +72,7 @@ To set up and run this Discord bot, follow these steps:
 2. **Bot Commands:**
 
    - `/connect`: Connect VOLO to your voice channel.
+   - `/language`: Sets transcription language (`auto`, `de`, `eng`).
    - `/scribe`: Starts the transcription in the current voice channel.
    - `/stop`: Stops the transcription.
    - `/disconnect`: Disconnects the bot from the voice channel.
