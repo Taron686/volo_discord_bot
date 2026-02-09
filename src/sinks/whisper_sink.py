@@ -18,9 +18,9 @@ from discord.sinks.core import Filters, Sink, default_filters
 from faster_whisper import WhisperModel
 from openai import OpenAI
 
-WHISPER_MODEL = "large-v3"
+WHISPER_MODEL = "small"
 DEFAULT_TRANSCRIPTION_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "auto")
-WHISPER__PRECISION = "float32"
+WHISPER__PRECISION = "int8"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -97,7 +97,7 @@ class WhisperSink(Sink):
         self.running = True
         self.speakers: List[Speaker] = []
         self.voice_queue = Queue()
-        self.executor = ThreadPoolExecutor(max_workers=8)  # TODO: Adjust this
+        self.executor = ThreadPoolExecutor(max_workers=2)  # TODO: Adjust this
         self.player_map = player_map
 
     @staticmethod
