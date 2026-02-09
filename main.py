@@ -1,11 +1,9 @@
 import asyncio
 import logging
 import os
-import time
 from datetime import datetime
 
 import discord
-import yaml
 from dotenv import load_dotenv
 
 from src.bot.helper import BotHelper
@@ -133,8 +131,9 @@ if __name__ == "__main__":
         if bot.guild_is_recording.get(ctx.guild_id, False):
             await ctx.respond("I'm sorry my liege, I can only write so fast.. 😥 ✒️", ephemeral=True)
             return
+        session = bot.start_session(ctx.guild_id)
         bot.start_recording(ctx)
-        await ctx.respond("Your words are now inscribed in the annals of history! ✍️ Fear not, for V.O.L.O leaves nothing unwritten", ephemeral=False)
+        await ctx.respond(f"Your words are now inscribed in the annals of history! ✍️ Session gestartet: `{session.session_id}`", ephemeral=False)
     
     @bot.slash_command(name="stop", description="Close the Tome on this adventure.")
     async def stop(ctx: discord.context.ApplicationContext):
@@ -159,9 +158,26 @@ if __name__ == "__main__":
         if bot.guild_is_recording.get(guild_id, False):
             await bot.get_transcription(ctx)
             bot.stop_recording(ctx)
+            await bot.get_transcription(ctx)
             bot.guild_is_recording[guild_id] = False
-            await ctx.respond("The quill rests. 🖋️ A pause, but not the end. Awaiting your next grand tale, of course!", ephemeral=False)
-            #await bot.get_transcription(ctx)
+
+            session = bot.stop_session(guild_id)
+            if session:
+                try:
+                    bot.finalize_session(session)
+                except Exception as e:
+                    logger.error(f"Audio export failed for session {session.session_id}: {e}")
+                    await ctx.respond(
+                        f"The quill rests. 🖋️ Transcript wurde gespeichert, aber Audioexport fehlgeschlagen für `{session.session_id}`.",
+                        ephemeral=False,
+                    )
+                else:
+                    await ctx.respond(
+                        f"The quill rests. 🖋️ Session `{session.session_id}` gespeichert unter `/data/sessions/{session.session_id}`.",
+                        ephemeral=False,
+                    )
+            else:
+                await ctx.respond("The quill rests. 🖋️", ephemeral=False)
             bot.cleanup_sink(ctx)
         
     @bot.slash_command(name="disconnect", description="VOLO leaves your party. Goodbye, friend.")

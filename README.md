@@ -87,3 +87,10 @@ Contributions to this project are welcome. Please ensure to follow the project's
 
 - This project uses [Whisper](https://github.com/openai/whisper) for audio transcription.
 - Thanks to the Discord.py community for their support and resources.
+
+## Session recording flow
+
+Entry points in code:
+- `/scribe` start command is implemented in `main.py` (`ink` function).
+- `/stop` stop command is implemented in `main.py` (`stop` function).
+- The per-chunk transcription callback path is `WhisperSink.insert_voice()` -> `WhisperSink.write_transcription_log()` in `src/sinks/whisper_sink.py`, drained in `VoloBot.get_transcription()`.

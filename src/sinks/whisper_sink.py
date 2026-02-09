@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import json
 import logging
@@ -199,7 +200,7 @@ class WhisperSink(Sink):
         
         transcription = self.transcribe_audio(wav_io)
 
-        return transcription
+        return transcription, wav_io.getvalue()
     
     def get_transcriptions(self):
         """Retrieve all transcriptions from the queue, format them to only include data, begin, and user_id."""
@@ -272,13 +273,11 @@ class WhisperSink(Sink):
                 for future in future_to_speaker:
                     speaker = future_to_speaker[future]
                     try:
-                        transcription = future.result()
-                        current_time = time.time()
-                        speaker_new_bytes = speaker.new_bytes
+                        transcription, wav_bytes = future.result()
                         # Remove speaker once returned. 
                         for s in self.speakers[:]:
                             if speaker.user == s.user:
-                                self.write_transcription_log(s, transcription)
+                                self.write_transcription_log(s, transcription, wav_bytes)
                                 self.speakers.remove(s)
 
                     except Exception as e:
@@ -287,15 +286,15 @@ class WhisperSink(Sink):
             except Exception as e:
                 logger.error(f"Error in insert_voice: {e}")
 
-    def check_speaker_timeouts(self, current_speaker, transcription):
+    def check_speaker_timeouts(self, current_speaker, transcription, wav_bytes):
 
         # Copy the list to avoid modification during iteration
         for speaker in self.speakers[:]:
             if current_speaker.user == speaker.user:
-                self.write_transcription_log(speaker, transcription)
+                self.write_transcription_log(speaker, transcription, wav_bytes)
                 self.speakers.remove(speaker)
-    
-    def write_transcription_log(self, speaker, transcription):
+
+    def write_transcription_log(self, speaker, transcription, wav_bytes):
         # Convert first_word and last_word Unix timestamps to datetime
         first_word_time = datetime.fromtimestamp(speaker.first_word).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         last_word_time = datetime.fromtimestamp(speaker.last_word).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
@@ -319,7 +318,13 @@ class WhisperSink(Sink):
         # Log the message
         transcription_logger.info(log_message)
         # Place into queue for processing
-        self.transcription_output_queue.put_nowait(log_message)
+        self.loop.call_soon_threadsafe(
+            self.transcription_output_queue.put_nowait,
+            {
+                "log": log_data,
+                "wav_b64": base64.b64encode(wav_bytes).decode("ascii"),
+            },
+        )
     
 
     @Filters.container
