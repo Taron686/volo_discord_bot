@@ -196,7 +196,7 @@ class WhisperSink(Sink):
                 threshold=0.8
             ),
             no_speech_threshold=0.6,
-            initial_prompt="You are writing the transcriptions for a D&D game.",
+            initial_prompt="You are writing accurate transcriptions for a multi-speaker voice call.",
         )
 
         segments = list(segments)

@@ -72,13 +72,13 @@ def configure_logging():
 def _get_stop_error_message(bot, ctx: discord.context.ApplicationContext) -> str | None:
     helper = bot.guild_to_helper.get(ctx.guild_id, None)
     if not helper:
-        return "Well, that's akward. I dont seem to be in your party."
+        return "I am not connected to your voice channel."
 
     if not helper.vc:
-        return "Well, that's akward. I dont seem to be in your party."
+        return "I am not connected to your voice channel."
 
     if not bot.guild_is_recording.get(ctx.guild_id, False):
-        return "Well, that’s awkward. 😐 Was I suppose to be writing?"
+        return "No active recording is running."
 
     return None
 
@@ -96,12 +96,12 @@ def _finalize_session_and_collect_artifacts(bot, session) -> tuple[str, list[Pat
     except Exception as e:
         logger.error(f"Audio export failed for session {session.session_id}: {e}")
         stop_message = (
-            f"The quill rests. 🖋️ Transcript wurde gespeichert, aber Audioexport "
-            f"fehlgeschlagen für `{session.session_id}`."
+            f"Recording stopped. Transcript saved, but audio export failed "
+            f"for `{session.session_id}`."
         )
     else:
         stop_message = (
-            f"The quill rests. 🖋️ Session `{session.session_id}` gespeichert unter "
+            f"Recording stopped. Session `{session.session_id}` saved under "
             f"`/data/sessions/{session.session_id}`."
         )
 
@@ -225,18 +225,18 @@ if __name__ == "__main__":
 
                 bot._close_and_clean_sink_for_guild(guild_id)
 
-    @bot.slash_command(name="connect", description="Add VOLO to your voice party.")
+    @bot.slash_command(name="connect", description="Connect VOLO to your voice channel.")
     async def connect(ctx: discord.context.ApplicationContext):
         if bot._is_ready is False:
-            await ctx.respond("Ahem, seems even the finest quills falter. 🛑 No connection, no tale. Try again, my dear adventurer shortly.”", ephemeral=True)
+            await ctx.respond("Bot is not ready yet. Please try again shortly.", ephemeral=True)
             return
         author_vc = ctx.author.voice
         if not author_vc:
-            await ctx.respond("I'm sorry adventurer, but it appears your voice has not joined a party.", ephemeral=True)
+            await ctx.respond("You need to join a voice channel first.", ephemeral=True)
             return
         # check if we are already connected to a voice channel
         if bot.guild_to_helper.get(ctx.guild_id, None):
-            await ctx.respond("I'm sorry adventurer, but it appears I'm already in a party. 🤺", ephemeral=True)
+            await ctx.respond("I am already connected in this server.", ephemeral=True)
             return
         await ctx.trigger_typing()
         try:
@@ -246,7 +246,7 @@ if __name__ == "__main__":
             helper.guild_id = guild_id
             helper.set_vc(vc)
             bot.guild_to_helper[guild_id] = helper
-            await ctx.respond(f"Ah, splendid! The lore shall now flow as freely as the finest ale. 🍺 Prepare to immortalize brilliance!", ephemeral=False)
+            await ctx.respond("Connected to your voice channel.", ephemeral=False)
             await ctx.guild.change_voice_state(channel=author_vc.channel, self_mute=True)
         except Exception as e:
             await ctx.respond(f"{e}", ephemeral=True)
@@ -266,8 +266,8 @@ if __name__ == "__main__":
             ephemeral=False,
         )
 
-    @bot.slash_command(name="scribe", description="Ink the Saga of this adventure.")
-    async def ink(ctx: discord.context.ApplicationContext):
+    @bot.slash_command(name="start_recording", description="Start transcribing this voice channel.")
+    async def start_recording(ctx: discord.context.ApplicationContext):
         await ctx.trigger_typing()
         connect_command = next((cmd for cmd in ctx.bot.application_commands if cmd.name == "connect"), None)
         if not connect_command:
@@ -275,18 +275,18 @@ if __name__ == "__main__":
         else:
             connect_text = f"</connect:{connect_command.id}>"
         if not bot.guild_to_helper.get(ctx.guild_id, None):
-            await ctx.respond(f"Well, that's akward. I dont seem to be in your party. How about I join? {connect_text}", ephemeral=True)
+            await ctx.respond(f"I am not connected. Use {connect_text} first.", ephemeral=True)
             return
-        # check if we are already scribing
+        # check if recording is already active
         if bot.guild_is_recording.get(ctx.guild_id, False):
-            await ctx.respond("I'm sorry my liege, I can only write so fast.. 😥 ✒️", ephemeral=True)
+            await ctx.respond("Recording is already running.", ephemeral=True)
             return
         session = bot.start_session(ctx.guild_id)
         bot.start_recording(ctx)
-        await ctx.respond(f"Your words are now inscribed in the annals of history! ✍️ Session gestartet: `{session.session_id}`", ephemeral=False)
+        await ctx.respond(f"Recording started. Session: `{session.session_id}`", ephemeral=False)
     
-    @bot.slash_command(name="stop", description="Close the Tome on this adventure.")
-    async def stop(ctx: discord.context.ApplicationContext):
+    @bot.slash_command(name="stop_recording", description="Stop the active transcription session.")
+    async def stop_recording(ctx: discord.context.ApplicationContext):
         stop_error = _get_stop_error_message(bot, ctx)
         if stop_error:
             await ctx.respond(stop_error, ephemeral=True)
@@ -298,7 +298,7 @@ if __name__ == "__main__":
             await _stop_recording_for_guild(bot, ctx)
             session = bot.stop_session(ctx.guild_id)
             if not session:
-                await ctx.respond("The quill rests. 🖋️", ephemeral=False)
+                await ctx.respond("Recording stopped.", ephemeral=False)
                 return
 
             stop_message, artifact_paths = _finalize_session_and_collect_artifacts(
@@ -309,19 +309,19 @@ if __name__ == "__main__":
         finally:
             bot.cleanup_sink(ctx)
         
-    @bot.slash_command(name="disconnect", description="VOLO leaves your party. Goodbye, friend.")
+    @bot.slash_command(name="disconnect", description="Disconnect VOLO from your voice channel.")
     async def disconnect(ctx: discord.context.ApplicationContext):
         guild_id = ctx.guild_id
         id_exists = bot.guild_to_helper.get(guild_id, None)
         if not id_exists:
-            await ctx.respond("Well, that's akward. I dont seem to be in your party... Should I just go?", ephemeral=True)
+            await ctx.respond("I am not connected in this server.", ephemeral=True)
             return
         
         helper = bot.guild_to_helper[guild_id]    
         bot_vc = helper.vc
         
         if not bot_vc:
-            await ctx.respond("Huh, weird.. where am I? Maybe we should party back up.", ephemeral=True)
+            await ctx.respond("I am not connected in this server.", ephemeral=True)
             return
         
         await ctx.trigger_typing()
@@ -330,18 +330,18 @@ if __name__ == "__main__":
         helper.set_vc(None)
         bot.guild_to_helper.pop(guild_id, None)
 
-        await ctx.respond("The tome is sealed! 📖 Another chapter well-told, another adventure preserved. You have my gratitude!", ephemeral=False)
+        await ctx.respond("Disconnected from voice channel.", ephemeral=False)
 
     @bot.slash_command(name="generate_pdf", description="Generate a PDF of the transcriptions.")
     async def generate_pdf(ctx: discord.context.ApplicationContext):
         guild_id = ctx.guild_id
         helper = bot.guild_to_helper.get(guild_id, None)
         if not helper:
-            await ctx.respond("Well, that's akward. I dont seem to be in your party.", ephemeral=True)
+            await ctx.respond("I am not connected to your voice channel.", ephemeral=True)
             return
         transcription = await bot.get_transcription(ctx)
         if not transcription:
-            await ctx.respond("I'm sorry, but it appears I have no transcriptions to write into the tome.", ephemeral=True)
+            await ctx.respond("No transcription data available for PDF generation.", ephemeral=True)
             return
         pdf_file_path = await pdf_generator(transcription)
         # Send the PDF as an attachment
@@ -359,11 +359,11 @@ if __name__ == "__main__":
     @bot.slash_command(name="update_player_map", description="Updates the player_map. If `PLAYER_MAP_FILE_PATH` is defined writes info to that location.")
     async def update_player_map(ctx: discord.context.ApplicationContext):
         if bot.guild_is_recording.get(ctx.guild_id, False):
-            await ctx.respond("I'm sorry, I am already scribing for a set of true names ..", ephemeral=True)
+            await ctx.respond("Cannot update player map while recording.", ephemeral=True)
             return
         try:
             await bot.update_player_map(ctx)
-            await ctx.respond("📜✨ Behold, the Tome of True Names is Updated ✨📜")
+            await ctx.respond("Player map updated.")
         except Exception as e:
             await ctx.respond(f"Unable to update player_map.yml.:\n{e}", ephemeral=True)
             raise e
@@ -377,9 +377,9 @@ if __name__ == "__main__":
             discord.EmbedField(
                 name="/disconnect", value="Disconnect from your voice channel.", inline=True),
             discord.EmbedField(
-                name="/scribe", value="Transcribe the voice channel.", inline=True),
+                name="/start_recording", value="Start transcribing the voice channel.", inline=True),
             discord.EmbedField(
-                name="/stop", value="Stop the transcription.", inline=True),
+                name="/stop_recording", value="Stop the active transcription.", inline=True),
             discord.EmbedField(
                 name="/language", value="Set transcription language (auto/de/eng).", inline=True),
             discord.EmbedField(
@@ -388,8 +388,8 @@ if __name__ == "__main__":
                 name="/help", value="Show the help message.", inline=True),
         ]
 
-        embed = discord.Embed(title="Volo Help 📖",
-                              description="""Summon the Lorekeeper’s Wisdom 🔉 ➡️ 📃""",
+        embed = discord.Embed(title="VOLO Help",
+                              description="Available commands",
                               color=discord.Color.blue(),
                               fields=embed_fields)
 

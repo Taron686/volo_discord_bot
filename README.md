@@ -58,8 +58,8 @@ To set up and run this Discord bot, follow these steps:
 
 ### Configuration
 
-- Edit `player_map.yml` to map Discord user IDs to player and character names for transcription.
-- Adjust `audio_processing.py` for specific Whisper model settings or other preferences.
+- Edit `player_map.yml` to map Discord user IDs to speaker labels for transcription.
+- Adjust transcription settings in `src/sinks/whisper_sink.py` if needed.
 
 ## Usage
 
@@ -73,8 +73,8 @@ To set up and run this Discord bot, follow these steps:
 
    - `/connect`: Connect VOLO to your voice channel.
    - `/language`: Sets transcription language (`auto`, `de`, `eng`).
-   - `/scribe`: Starts the transcription in the current voice channel.
-   - `/stop`: Stops the transcription.
+   - `/start_recording`: Starts the transcription in the current voice channel.
+   - `/stop_recording`: Stops the transcription.
    - `/disconnect`: Disconnects the bot from the voice channel.
 
 ## Contributing
@@ -93,6 +93,6 @@ Contributions to this project are welcome. Please ensure to follow the project's
 ## Session recording flow
 
 Entry points in code:
-- `/scribe` start command is implemented in `main.py` (`ink` function).
-- `/stop` stop command is implemented in `main.py` (`stop` function).
+- `/start_recording` start command is implemented in `main.py` (`start_recording` function).
+- `/stop_recording` stop command is implemented in `main.py` (`stop_recording` function).
 - The per-chunk transcription callback path is `WhisperSink.insert_voice()` -> `WhisperSink.write_transcription_log()` in `src/sinks/whisper_sink.py`, drained in `VoloBot.get_transcription()`.

@@ -11,20 +11,10 @@
 [x] create docker container for portability
     [x] compose setup all containers.
 
-[] D20 Integration
-    [] Extend VOLO to allow the GM to connect to D&D beyond ? 
-        [] Save config for the channel
-            [] Error handling -> resetup etc.
-        [] Get the gamelog , save with rolls and status. 
-        [] Link D&D beyond Character to slack id
-    [] Create words to feed the bot from character sheets (names , spells, inventory, actions)
-
-
 [] Support non-local hardware
     [] datbase secret management
     [] Google Voice
         [] user billing
     [] OpenAI Voice
         [] user billing
-
 
