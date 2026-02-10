@@ -246,6 +246,14 @@ class VoloBot(discord.Bot):
         mixed_out = session.audio_dir / "mixed_full.ogg"
         mix_opus_ogg(user_outputs, mixed_out, bitrate="48k")
 
+    def get_session_artifact_paths(self, session: SessionContext) -> list[Path]:
+        artifacts = [
+            session.session_dir / "transcript.md",
+            session.audio_dir / "mixed_full.ogg",
+        ]
+        artifacts.extend(sorted(session.audio_dir.glob("user_*_full.ogg")))
+        return [path for path in artifacts if path.exists()]
+
     async def update_player_map(self, ctx: discord.context.ApplicationContext):
         player_map = {}
         for member in ctx.guild.members:
